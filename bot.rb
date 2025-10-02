@@ -19,29 +19,37 @@ BTC_ADDRESS = '3LKSkoE3QtXAU6oDmVHdMmEJ3EwwS6ESwy'
 
 def fetch_ckpool_data
   url = "https://solo.ckpool.org/users/#{BTC_ADDRESS}"
+  puts "Fetching CKPool data from: #{url}"
   response = HTTParty.get(url, timeout: 20)
 
   if response.code == 200
-    JSON.parse(response.body)
+    data = JSON.parse(response.body)
+    puts "CKPool data fetched successfully: #{data.keys.join(', ')}"
+    data
   else
     raise "CKPool API error: #{response.code}"
   end
 rescue => e
   puts "Error fetching CKPool data: #{e.message}"
+  puts e.backtrace.first(3).join("\n")
   nil
 end
 
 def fetch_network_difficulty
   url = "https://blockchain.info/q/getdifficulty"
+  puts "Fetching network difficulty from: #{url}"
   response = HTTParty.get(url, timeout: 10)
 
   if response.code == 200
-    response.body.strip.to_f
+    difficulty = response.body.strip.to_f
+    puts "Network difficulty fetched: #{difficulty}"
+    difficulty
   else
     raise "Blockchain.info API error: #{response.code}"
   end
 rescue => e
   puts "Error fetching difficulty: #{e.message}"
+  puts e.backtrace.first(3).join("\n")
   nil
 end
 
@@ -166,14 +174,24 @@ Telegram::Bot::Client.run(token) do |bot|
             text: "📊 レポートを生成中..."
           )
 
-          report = generate_report
+          begin
+            report = generate_report
 
-          bot.api.send_message(
-            chat_id: message.chat.id,
-            text: report,
-            parse_mode: 'Markdown',
-            disable_web_page_preview: true
-          )
+            bot.api.send_message(
+              chat_id: message.chat.id,
+              text: report,
+              parse_mode: 'Markdown',
+              disable_web_page_preview: true
+            )
+          rescue => e
+            error_message = "⚠️ エラーが発生しました:\n#{e.message}\n\nスタックトレース:\n#{e.backtrace.first(5).join("\n")}"
+            puts error_message
+
+            bot.api.send_message(
+              chat_id: message.chat.id,
+              text: "⚠️ レポート生成中にエラーが発生しました。\n詳細: #{e.message}"
+            )
+          end
 
         when '/help'
           help_message = <<~MSG
