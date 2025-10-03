@@ -1,76 +1,69 @@
-# Telegram Echo Bot
+# CKPool Solo Mining Monitor Bot
 
-シンプルな鸚鵡返し（エコー）Telegram botのRuby実装です。Docker内で動作します。
+A Telegram bot that monitors CKPool solo mining operations and provides daily reports.
 
-## 機能
+## Features
 
-ユーザーが送信したメッセージをそのまま返信するシンプルなボットです。
+- **Worker Management**: Add/remove workers with BTC addresses
+- **Real-time Status**: Check current mining status instantly
+- **Daily Reports**: Automated reports at user-specified times (UTC)
+- **Block Discovery Alerts**: Notifications when blocks are found
+- **Multi-worker Support**: Monitor multiple workers per user
 
-## セットアップ
+## Setup
 
-### 1. Telegram Bot Tokenの取得
+### 1. Get Telegram Bot Token
 
-1. Telegramで[@BotFather](https://t.me/botfather)を検索
-2. `/newbot`コマンドでボットを作成
-3. ボット名とユーザー名を設定
-4. 発行されたトークンをコピー
+1. Message [@BotFather](https://t.me/botfather) on Telegram
+2. Use `/newbot` command to create a bot
+3. Set bot name and username
+4. Copy the provided token
 
-### 2. 環境設定
+### 2. Environment Configuration
 
-`.env`ファイルのトークンを更新：
+Create a `.env` file:
 
 ```bash
-TELEGRAM_BOT_TOKEN=あなたのボットトークン
+TELEGRAM_BOT_TOKEN=your_bot_token_here
 ```
 
-### 3. Dockerでの起動
+### 3. Docker Deployment
 
 ```bash
-# イメージのビルド
-docker-compose build
+# Build and start
+docker-compose up --build
 
-# ボットの起動
-docker-compose up
-
-# バックグラウンドで起動する場合
+# Run in background
 docker-compose up -d
 
-# ログの確認
+# View logs
 docker-compose logs -f
 
-# 停止
+# Stop
 docker-compose down
 ```
 
-## 開発
+## Commands
 
-ローカルでの実行（Dockerを使わない場合）：
+- `/start` - Start the bot
+- `/add_worker <address.worker_name>` - Add worker (e.g., `3LKS...6ESwy.miner1`)
+- `/remove_worker <worker_name>` - Remove worker
+- `/list_workers` - List all workers
+- `/check` or `/now` - Check current mining status
+- `/set_time_now` - Set daily report time to current UTC time
+- `/status` - View current settings
+- `/stop` - Stop notifications
+- `/help` - Show available commands
 
-```bash
-# 依存関係のインストール
-bundle install
+## Requirements
 
-# ボットの起動
-ruby bot.rb
-```
+- Docker and Docker Compose
+- Valid Telegram Bot Token
+- Internet connection for CKPool API access
 
-## ファイル構成
+## Tech Stack
 
-- `bot.rb` - メインのボットアプリケーション
-- `Gemfile` - Ruby依存関係
-- `Dockerfile` - Dockerコンテナ設定
-- `docker-compose.yml` - Docker Compose設定
-- `.env` - 環境変数（Gitで管理されません）
-- `.gitignore` - Git除外ファイル
-
-## 使い方
-
-1. ボットを起動
-2. Telegramでボットを検索（@あなたのボット名）
-3. メッセージを送信
-4. ボットが同じメッセージを返信
-
-## 注意事項
-
-- `.env`ファイルは絶対にGitにコミットしないでください
-- トークンは安全に管理してください
+- Ruby 3.2
+- SQLite database
+- Docker containerization
+- CKPool API integration
