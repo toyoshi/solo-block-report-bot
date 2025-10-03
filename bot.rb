@@ -61,6 +61,9 @@ end
 def format_number(num)
   return "0" if num.nil? || num == 0
 
+  # 文字列の場合は数値に変換
+  num = num.to_f if num.is_a?(String)
+
   if num >= 1_000_000_000_000_000
     "%.2f P" % (num / 1_000_000_000_000_000.0)
   elsif num >= 1_000_000_000_000
