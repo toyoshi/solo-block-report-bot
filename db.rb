@@ -9,9 +9,9 @@ else
   Sequel.sqlite('bot.db')
 end
 
-# テーブル作成
+# テーブル作成順序と外部キー制約を正しく設定
 DB.create_table? :users do
-  primary_key :chat_id, :Bignum
+  column :chat_id, :bigint, primary_key: true
   String :username
   String :first_name
   Integer :hour, default: 9
@@ -24,12 +24,13 @@ end
 
 DB.create_table? :workers do
   primary_key :id
-  foreign_key :chat_id, :users, type: :Bignum, on_delete: :cascade
+  column :chat_id, :bigint, null: false
   String :label, null: false, size: 100
   String :btc_address, null: false, size: 100
   DateTime :created_at, default: Sequel::CURRENT_TIMESTAMP
   DateTime :updated_at, default: Sequel::CURRENT_TIMESTAMP
 
+  foreign_key [:chat_id], :users, key: [:chat_id], on_delete: :cascade
   unique [:chat_id, :label]
   index :chat_id
   index :btc_address
@@ -45,11 +46,12 @@ end
 
 DB.create_table? :command_logs do
   primary_key :id
-  foreign_key :chat_id, :users, type: :Bignum, on_delete: :cascade
+  column :chat_id, :bigint, null: false
   String :command, null: false, size: 50
   String :parameters, size: 255
   DateTime :executed_at, default: Sequel::CURRENT_TIMESTAMP
 
+  foreign_key [:chat_id], :users, key: [:chat_id], on_delete: :cascade
   index :chat_id
   index :executed_at
   index :command
@@ -58,8 +60,11 @@ end
 
 # Sequelモデル定義
 class User < Sequel::Model
-  one_to_many :workers
-  one_to_many :command_logs
+  one_to_many :workers, key: :chat_id
+  one_to_many :command_logs, key: :chat_id
+
+  # Enable unrestricted primary key assignment
+  unrestrict_primary_key
 
   def self.find_or_create(chat_id, username: nil, first_name: nil)
     user = self[chat_id]
@@ -95,7 +100,7 @@ class User < Sequel::Model
 end
 
 class Worker < Sequel::Model
-  many_to_one :user, key: :chat_id
+  many_to_one :user, key: :chat_id, primary_key: :chat_id
   one_to_one :hit_state
 
   def self.find_by_label(chat_id, label)
@@ -125,7 +130,7 @@ class HitState < Sequel::Model
 end
 
 class CommandLog < Sequel::Model
-  many_to_one :user, key: :chat_id
+  many_to_one :user, key: :chat_id, primary_key: :chat_id
 
   # 分析用メソッド
   def self.recent_activity(hours = 24)
@@ -153,6 +158,19 @@ class CommandLog < Sequel::Model
       .group_by(:hour)
       .order(:hour)
   end
+end
+
+begin
+  # Test database connection
+  DB.test_connection
+  puts "Database connection successful"
+  puts "SQLite database file: #{DB.opts[:database] || 'in-memory'}" if DB.adapter_scheme == :sqlite
+rescue => e
+  puts "Database connection failed: #{e.message}"
+  puts "Error class: #{e.class}"
+  puts "Backtrace:"
+  puts e.backtrace.first(5).join("\n")
+  exit 1
 end
 
 puts "Database initialized successfully"

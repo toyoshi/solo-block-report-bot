@@ -6,3 +6,9 @@ gem 'httparty', '~> 0.21'
 gem 'sequel', '~> 5.84'
 gem 'sqlite3', '~> 1.6'
 gem 'rufus-scheduler', '~> 3.9'
+
+group :test do
+  gem 'minitest', '~> 5.20'
+  gem 'minitest-reporters', '~> 1.6'
+  gem 'webmock', '~> 3.19'
+end

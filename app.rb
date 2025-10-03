@@ -6,6 +6,8 @@ require 'httparty'
 require 'json'
 require 'time'
 require 'rufus-scheduler'
+
+# Load database after basic requires
 require_relative 'db'
 
 TOKEN = ENV['TELEGRAM_BOT_TOKEN']
@@ -13,8 +15,11 @@ TZ = 'Asia/Tokyo'
 
 if TOKEN.nil? || TOKEN.empty? || TOKEN == 'YOUR_BOT_TOKEN_HERE'
   puts 'Error: Please set TELEGRAM_BOT_TOKEN in .env file'
+  puts 'Get your bot token from @BotFather on Telegram'
   exit 1
 end
+
+# Database ready
 
 # BTCアドレスのバリデーション
 def valid_btc_address?(addr)
@@ -93,14 +98,17 @@ def generate_worker_report(worker, data, difficulty)
   end
 
   lines = []
-  lines << "📍 **#{worker.label}**"
-  lines << "アドレス: `#{worker.btc_address}`"
+  lines << "📍 #{worker.label}"
+  lines << "アドレス: #{worker.btc_address}"
   lines << ""
   lines << "⚡ ハッシュレート:"
-  lines << "• 1m: #{format_number(data["hashrate1m"])}H/s | 5m: #{format_number(data["hashrate5m"])}H/s"
-  lines << "• 1h: #{format_number(data["hashrate1hr"])}H/s | 1d: #{format_number(data["hashrate1d"])}H/s"
+  lines << "• 1m: #{format_number(data["hashrate1m"])}H/s"
+  lines << "• 5m: #{format_number(data["hashrate5m"])}H/s"
+  lines << "• 1h: #{format_number(data["hashrate1hr"])}H/s"
+  lines << "• 1d: #{format_number(data["hashrate1d"])}H/s"
   lines << ""
-  lines << "📊 シェア: #{data["shares"] || 0} | ベスト: #{format_number(bestshare)}"
+  lines << "📊 シェア: #{data["shares"] || 0}"
+  lines << "📊 ベストシェア: #{format_number(bestshare)}"
   lines << hit_status
   lines << ""
   lines << "🕐 最終シェア: #{format_timestamp(data["lastshare"])}"
@@ -124,19 +132,14 @@ def check_block_hits(bot)
       # 重複通知防止
       if worker.should_notify_hit?(bestshare)
         user = worker.user
-        msg = "🎉🎉🎉 **ブロック発見！** 🎉🎉🎉\n\n"
+        msg = "🎉🎉🎉 ブロック発見！ 🎉🎉🎉\n\n"
         msg += "ワーカー: #{worker.label}\n"
-        msg += "アドレス: `#{worker.btc_address}`\n"
+        msg += "アドレス: #{worker.btc_address}\n"
         msg += "ベストシェア: #{format_number(bestshare)}\n"
         msg += "ネットワーク難易度: #{format_number(difficulty)}\n"
-        msg += "\n🔗 [CKPoolで確認](https://solo.ckpool.org/users/#{worker.btc_address})"
+        msg += "\n🔗 https://solo.ckpool.org/users/#{worker.btc_address}"
 
-        bot.api.send_message(
-          chat_id: user.chat_id,
-          text: msg,
-          parse_mode: 'Markdown',
-          disable_web_page_preview: true
-        )
+        send_message(bot, user.chat_id, msg)
       end
     rescue => e
       puts "Error checking worker #{worker.id}: #{e.message}"
@@ -151,7 +154,7 @@ def send_daily_report(bot, user)
 
   difficulty = fetch_network_difficulty
 
-  lines = ["📝 **日次レポート** (#{Time.now.getlocal("+09:00").strftime("%Y-%m-%d")})"]
+  lines = ["📝 日次レポート (#{Time.now.getlocal("+09:00").strftime("%Y-%m-%d")})"]
   lines << "━━━━━━━━━━━━━━━━━━━━"
   lines << ""
 
@@ -167,12 +170,7 @@ def send_daily_report(bot, user)
     lines << "🎯 ネットワーク難易度: #{format_number(difficulty)}"
   end
 
-  bot.api.send_message(
-    chat_id: user.chat_id,
-    text: lines.join("\n"),
-    parse_mode: 'Markdown',
-    disable_web_page_preview: true
-  )
+  send_message(bot, user.chat_id, lines.join("\n"))
 rescue => e
   puts "Error sending daily report to #{user.chat_id}: #{e.message}"
 end
@@ -199,13 +197,17 @@ def start_scheduler(bot)
   scheduler
 end
 
+# メッセージ送信ヘルパー（統一化のため）
+def send_message(bot, chat_id, text)
+  bot.api.send_message(chat_id: chat_id, text: text)
+end
+
 # メインボット処理
-puts "Starting CKPool Monitor Bot (Full Version)..."
+puts "Starting CKPool Monitor Bot..."
 puts "Bot is running. Press Ctrl+C to stop."
 
 Telegram::Bot::Client.run(TOKEN) do |bot|
   scheduler = start_scheduler(bot)
-
   bot.listen do |message|
     next unless message.is_a?(Telegram::Bot::Types::Message)
     next unless message.text
@@ -225,38 +227,16 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       user.update(active: true)
       user.log_command('start')
 
-      welcome_msg = <<~MSG
-        👋 **CKPool Solo Mining Monitor Botへようこそ！**
+      welcome_msg = "👋 CKPool Solo Mining Monitor Botへようこそ！\n\n使用可能なコマンド:\n• /add_worker - ワーカー追加\n• /help - ヘルプ表示\n• /status - 設定確認"
 
-        📋 **使用可能なコマンド:**
-        • `/add_worker <ラベル> <BTCアドレス>` - ワーカー追加
-        • `/remove_worker <ラベル>` - ワーカー削除
-        • `/list_workers` - ワーカー一覧
-        • `/check` または `/now` - 即座に状況確認
-        • `/time HH:MM` - 日次レポート時刻設定
-        • `/status` - 現在の設定確認
-        • `/stop` - 通知停止
-        • `/help` - ヘルプ表示
-
-        まずはワーカーを追加してください：
-        例: `/add_worker main 3LKSkoE3QtXAU6oDmVHdMmEJ3EwwS6ESwy`
-      MSG
-
-      bot.api.send_message(
-        chat_id: chat_id,
-        text: welcome_msg,
-        parse_mode: 'Markdown'
-      )
+      send_message(bot, chat_id, welcome_msg)
 
     when /^\/add_worker\s+(\S+)\s+(\S+)$/
       label, btc_address = $1, $2
       user.log_command('add_worker', "#{label} #{btc_address}")
 
       unless valid_btc_address?(btc_address)
-        bot.api.send_message(
-          chat_id: chat_id,
-          text: "❌ 無効なBTCアドレスです。"
-        )
+        send_message(bot, chat_id, "❌ 無効なBTCアドレスです。")
         next
       end
 
@@ -269,7 +249,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         msg = "✅ ワーカー「#{label}」を追加しました。"
       end
 
-      bot.api.send_message(chat_id: chat_id, text: msg)
+      send_message(bot, chat_id, msg)
 
     when /^\/remove_worker\s+(\S+)$/
       label = $1
@@ -292,39 +272,31 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       if workers.empty?
         msg = "📋 登録されているワーカーはありません。"
       else
-        lines = ["📋 **登録ワーカー一覧:**"]
+        lines = ["📋 登録ワーカー一覧:"]
         workers.each do |w|
-          lines << "• #{w.label}: `#{w.btc_address}`"
+          lines << "• #{w.label}: #{w.btc_address}"
         end
         msg = lines.join("\n")
       end
 
-      bot.api.send_message(
-        chat_id: chat_id,
-        text: msg,
-        parse_mode: 'Markdown'
-      )
+      send_message(bot, chat_id, msg)
 
     when '/check', '/now'
       user.log_command('check')
 
       workers = user.active_workers
       if workers.empty?
-        bot.api.send_message(
-          chat_id: chat_id,
-          text: "❌ ワーカーが登録されていません。\n`/add_worker`でワーカーを追加してください。",
-          parse_mode: 'Markdown'
+        send_message(
+          bot, chat_id,
+          "❌ ワーカーが登録されていません。\n/add_worker でワーカーを追加してください。"
         )
         next
       end
 
-      bot.api.send_message(
-        chat_id: chat_id,
-        text: "📊 データを取得中... (#{workers.size}ワーカー)"
-      )
+      send_message(bot, chat_id, "📊 データを取得中... (#{workers.size}ワーカー)")
 
       difficulty = fetch_network_difficulty
-      lines = ["📈 **現在のマイニング状況**"]
+      lines = ["📈 現在のマイニング状況"]
       lines << "━━━━━━━━━━━━━━━━━━━━"
       lines << ""
 
@@ -343,12 +315,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       lines << ""
       lines << "⏰ 生成時刻: #{Time.now.getlocal("+09:00").strftime("%Y-%m-%d %H:%M:%S JST")}"
 
-      bot.api.send_message(
-        chat_id: chat_id,
-        text: lines.join("\n"),
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true
-      )
+      send_message(bot, chat_id, lines.join("\n"))
 
     when /^\/time\s+(\d{1,2}):(\d{2})$/
       hour, minute = $1.to_i, $2.to_i
@@ -361,13 +328,13 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         msg = "❌ 無効な時刻です。HH:MM形式で入力してください（例: 09:00）"
       end
 
-      bot.api.send_message(chat_id: chat_id, text: msg)
+      send_message(bot, chat_id, msg)
 
     when '/status'
       user.log_command('status')
 
       workers = user.active_workers
-      lines = ["📊 **現在の設定:**"]
+      lines = ["📊 現在の設定:"]
       lines << ""
       lines << "• 日次レポート: #{"%02d:%02d" % [user.hour, user.minute]} JST"
       lines << "• 配信状態: #{user.active ? "有効 ✅" : "無効 ❌"}"
@@ -375,78 +342,41 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
 
       if workers.any?
         lines << ""
-        lines << "**ワーカー一覧:**"
+        lines << "ワーカー一覧:"
         workers.each do |w|
-          lines << "• #{w.label}: `#{w.btc_address[0..20]}...`"
+          lines << "• #{w.label}: #{w.btc_address[0..20]}..."
         end
       end
 
-      bot.api.send_message(
-        chat_id: chat_id,
-        text: lines.join("\n"),
-        parse_mode: 'Markdown'
-      )
+      send_message(bot, chat_id, lines.join("\n"))
 
     when '/stop'
       user.log_command('stop')
       user.update(active: false)
 
-      bot.api.send_message(
-        chat_id: chat_id,
-        text: "🔕 通知を停止しました。\n再開するには `/start` を送信してください。"
-      )
+      send_message(bot, chat_id, "🔕 通知を停止しました。\n再開するには /start を送信してください。")
 
     when '/help'
-      user.log_command('help')
+      # Simplified help - no markdown to avoid parsing errors
+      help_msg = "📋 コマンド一覧:\n\n• /start - ボット開始\n• /help - ヘルプ表示\n• /add_worker - ワーカー追加\n• /status - 設定確認"
 
-      help_msg = <<~MSG
-        📋 **コマンド一覧:**
-
-        **ワーカー管理:**
-        • `/add_worker <ラベル> <BTCアドレス>` - ワーカー追加
-        • `/remove_worker <ラベル>` - ワーカー削除
-        • `/list_workers` - ワーカー一覧表示
-
-        **モニタリング:**
-        • `/check` または `/now` - 今すぐ状況確認
-        • `/time HH:MM` - 日次レポート時刻設定（例: /time 09:00）
-        • `/status` - 現在の設定確認
-
-        **その他:**
-        • `/start` - ボット開始/再開
-        • `/stop` - 通知停止
-        • `/help` - このヘルプ表示
-
-        **自動通知:**
-        • ブロック発見時に即座に通知
-        • 設定時刻に日次レポート配信
-      MSG
-
-      bot.api.send_message(
-        chat_id: chat_id,
-        text: help_msg,
-        parse_mode: 'Markdown'
-      )
+      send_message(bot, chat_id, help_msg)
 
     else
-      bot.api.send_message(
-        chat_id: chat_id,
-        text: "❓ 不明なコマンドです。\n`/help` でコマンド一覧を確認してください。",
-        parse_mode: 'Markdown'
-      )
+      send_message(bot, chat_id, "❓ 不明なコマンドです。\n/help でコマンド一覧を確認してください。")
     end
 
   rescue => e
-    puts "Error handling message: #{e.message}"
-    puts e.backtrace.first(5)
+    error_message = "Error handling message from #{chat_id}: #{e.message}"
+    puts error_message
+    puts "Backtrace:"
+    puts e.backtrace.first(10).join("\n")
 
     begin
-      bot.api.send_message(
-        chat_id: chat_id,
-        text: "⚠️ エラーが発生しました。しばらく待ってから再度お試しください。"
-      )
-    rescue
-      # エラー通知も失敗した場合は無視
+      detailed_error = "⚠️ エラーが発生しました\n詳細: #{e.class.name}\nしばらく待ってから再度お試しください。"
+      send_message(bot, chat_id, detailed_error)
+    rescue => send_error
+      puts "Failed to send error message: #{send_error.message}"
     end
   end
 
