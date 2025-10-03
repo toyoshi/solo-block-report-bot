@@ -108,7 +108,11 @@ class Worker < Sequel::Model
   end
 
   def get_or_create_hit_state
-    hit_state || HitState.create(worker_id: self.id)
+    hit_state || begin
+      new_state = HitState.create(worker_id: self.id)
+      associations[:hit_state] = new_state
+      new_state
+    end
   end
 
   def should_notify_hit?(bestshare)
@@ -127,6 +131,9 @@ end
 
 class HitState < Sequel::Model
   many_to_one :worker
+
+  # Enable unrestricted primary key assignment
+  unrestrict_primary_key
 end
 
 class CommandLog < Sequel::Model

@@ -8,7 +8,8 @@ gem 'sqlite3', '~> 1.6'
 gem 'rufus-scheduler', '~> 3.9'
 
 group :test do
-  gem 'minitest', '~> 5.20'
-  gem 'minitest-reporters', '~> 1.6'
-  gem 'webmock', '~> 3.19'
+  gem 'minitest', '~> 5.25'
+  gem 'minitest-reporters', '~> 1.7'
+  gem 'webmock', '~> 3.25'
+  gem 'rake', '~> 13.0'
 end

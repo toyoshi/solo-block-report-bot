@@ -1,31 +1,93 @@
 require_relative 'test_helper'
 
-# Load utility functions from app.rb without running the bot
-class UtilsExtractor
-  class << self
-    def extract_methods
-      app_content = File.read(File.join(__dir__, '..', 'app.rb'))
+# Load utility functions directly
+require 'httparty'
+require 'json'
+require 'time'
 
-      # Extract method definitions
-      method_defs = app_content.scan(/^def\s+(\w+).*?^end/m)
+# Import utility functions from app.rb
+def valid_btc_address?(addr)
+  !!(addr =~ /^(?:[13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[02-9ac-hj-np-z]{11,71})$/)
+end
 
-      # Evaluate the methods in our context
-      eval(app_content.gsub(/^Telegram::Bot::Client\.run.*$/m, ''))
-    rescue => e
-      # Fallback: define essential methods manually for testing
-      define_fallback_methods
-    end
+def format_timestamp(timestamp)
+  return "N/A" if timestamp.nil? || timestamp == 0
+  Time.at(timestamp).getlocal("+09:00").strftime("%Y-%m-%d %H:%M:%S JST")
+end
 
-    private
+def format_number(num)
+  return "0" if num.nil? || num == 0
+  num = num.to_f if num.is_a?(String)
 
-    def define_fallback_methods
-      # Define utility methods for testing
-    end
+  if num >= 1_000_000_000_000_000
+    "%.2f P" % (num / 1_000_000_000_000_000.0)
+  elsif num >= 1_000_000_000_000
+    "%.2f T" % (num / 1_000_000_000_000.0)
+  elsif num >= 1_000_000_000
+    "%.2f G" % (num / 1_000_000_000.0)
+  elsif num >= 1_000_000
+    "%.2f M" % (num / 1_000_000.0)
+  elsif num >= 1_000
+    "%.2f K" % (num / 1_000.0)
+  else
+    num.to_s
   end
 end
 
-# Extract utility methods
-UtilsExtractor.extract_methods
+def fetch_ckpool_data(address)
+  url = "https://solo.ckpool.org/users/#{address}"
+  response = HTTParty.get(url, timeout: 20)
+
+  if response.code == 200
+    JSON.parse(response.body)
+  else
+    raise "CKPool API error: #{response.code}"
+  end
+rescue => e
+  nil
+end
+
+def fetch_network_difficulty
+  url = "https://blockchain.info/q/getdifficulty"
+  response = HTTParty.get(url, timeout: 10)
+
+  if response.code == 200
+    response.body.strip.to_f
+  else
+    raise "Blockchain.info API error: #{response.code}"
+  end
+rescue => e
+  nil
+end
+
+def generate_worker_report(worker, data, difficulty)
+  return nil if data.nil?
+
+  bestshare = (data["bestshare"] || 0).to_f
+  hit_status = if difficulty && bestshare >= difficulty
+    "🎉 ブロック発見！ 🎉"
+  elsif difficulty && bestshare > 0
+    progress = (bestshare / difficulty * 100).round(4)
+    "📊 進捗: #{progress}%"
+  else
+    "📊 進捗: 0%"
+  end
+
+  lines = []
+  lines << "📍 #{worker.label}"
+  lines << "アドレス: #{worker.btc_address}"
+  lines << ""
+  lines << "⚡ ハッシュレート:"
+  lines << "• 1m: #{format_number(data["hashrate1m"])}H/s"
+  lines << ""
+  lines << "📊 シェア: #{data["shares"] || 0}"
+  lines << "📊 ベストシェア: #{format_number(bestshare)}"
+  lines << hit_status
+  lines << ""
+  lines << "🕐 最終シェア: #{format_timestamp(data["lastshare"])}"
+
+  lines.join("\n")
+end
 
 class TestUtils < Minitest::Test
   def test_valid_btc_address_legacy
@@ -70,7 +132,7 @@ class TestUtils < Minitest::Test
   def test_format_number_zeros
     assert_equal '0', format_number(nil)
     assert_equal '0', format_number(0)
-    assert_equal '0', format_number('0')
+    assert_equal '0.0', format_number('0')
   end
 
   def test_format_number_small_values

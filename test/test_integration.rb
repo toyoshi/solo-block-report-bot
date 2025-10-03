@@ -101,8 +101,8 @@ class TestIntegration < Minitest::Test
       user.update(active: true)
       user.log_command('start')
 
-      welcome_msg = "👋 **CKPool Solo Mining Monitor Botへようこそ！**\n\n📋 **使用可能なコマンド:**"
-      bot.api.send_message(chat_id: chat_id, text: welcome_msg, parse_mode: 'Markdown')
+      welcome_msg = "👋 CKPool Solo Mining Monitor Botへようこそ！\n\n使用可能なコマンド:\n• /add_worker - ワーカー追加\n• /help - ヘルプ表示\n• /status - 設定確認"
+      bot.api.send_message(chat_id: chat_id, text: welcome_msg)
 
     when /^\/add_worker\s+(\S+)\s+(\S+)$/
       label, btc_address = $1, $2
@@ -145,12 +145,12 @@ class TestIntegration < Minitest::Test
       if workers.empty?
         msg = "📋 登録されているワーカーはありません。"
       else
-        lines = ["📋 **登録ワーカー一覧:**"]
-        workers.each { |w| lines << "• #{w.label}: `#{w.btc_address}`" }
+        lines = ["📋 登録ワーカー一覧:"]
+        workers.each { |w| lines << "• #{w.label}: #{w.btc_address}" }
         msg = lines.join("\n")
       end
 
-      bot.api.send_message(chat_id: chat_id, text: msg, parse_mode: 'Markdown')
+      bot.api.send_message(chat_id: chat_id, text: msg)
 
     when '/check', '/now'
       user.log_command('check')
@@ -181,11 +181,19 @@ class TestIntegration < Minitest::Test
       user.log_command('status')
 
       workers = user.active_workers
-      lines = ["📊 **現在の設定:**", "", "• 日次レポート: #{"%02d:%02d" % [user.hour, user.minute]} JST"]
+      lines = ["📊 現在の設定:", "", "• 日次レポート: #{"%02d:%02d" % [user.hour, user.minute]} JST"]
       lines << "• 配信状態: #{user.active ? "有効 ✅" : "無効 ❌"}"
       lines << "• 登録ワーカー数: #{workers.size}"
 
-      bot.api.send_message(chat_id: chat_id, text: lines.join("\n"), parse_mode: 'Markdown')
+      if workers.any?
+        lines << ""
+        lines << "ワーカー一覧:"
+        workers.each do |w|
+          lines << "• #{w.label}: #{w.btc_address[0..20]}..."
+        end
+      end
+
+      bot.api.send_message(chat_id: chat_id, text: lines.join("\n"))
 
     when '/stop'
       user.log_command('stop')
@@ -195,10 +203,11 @@ class TestIntegration < Minitest::Test
 
     when '/help'
       user.log_command('help')
-      bot.api.send_message(chat_id: chat_id, text: "📋 **コマンド一覧:**", parse_mode: 'Markdown')
+      help_msg = "📋 コマンド一覧:\n\n• /start - ボット開始\n• /help - ヘルプ表示\n• /add_worker - ワーカー追加\n• /status - 設定確認"
+      bot.api.send_message(chat_id: chat_id, text: help_msg)
 
     else
-      bot.api.send_message(chat_id: chat_id, text: "❓ 不明なコマンドです。", parse_mode: 'Markdown')
+      bot.api.send_message(chat_id: chat_id, text: "❓ 不明なコマンドです。")
     end
   end
 
@@ -211,7 +220,7 @@ class TestIntegration < Minitest::Test
     assert_equal @chat_id, message[:chat_id]
     assert_includes message[:text], 'ようこそ'
     assert_includes message[:text], 'add_worker'
-    assert_equal 'Markdown', message[:parse_mode]
+    assert_nil message[:parse_mode]
 
     # Check user was created and logged
     user = User[@chat_id]
@@ -266,7 +275,7 @@ class TestIntegration < Minitest::Test
     process_message('/add_worker miner1 3LKSkoE3QtXAU6oDmVHdMmEJ3EwwS6ESwy')
     @bot.clear_messages
 
-    process_message('/add_worker miner1 3ABC123DEF456GHI789JKL012MNO345PQR678STU')
+    process_message('/add_worker miner1 1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2')
 
     message = last_message
     assert_includes message[:text], '✅'
@@ -274,7 +283,7 @@ class TestIntegration < Minitest::Test
 
     # Check worker was updated
     worker = Worker.find_by_label(@chat_id, 'miner1')
-    assert_equal '3ABC123DEF456GHI789JKL012MNO345PQR678STU', worker.btc_address
+    assert_equal '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', worker.btc_address
   end
 
   def test_remove_worker_existing
@@ -317,7 +326,7 @@ class TestIntegration < Minitest::Test
   def test_list_workers_with_data
     process_message('/start')
     process_message('/add_worker miner1 3LKSkoE3QtXAU6oDmVHdMmEJ3EwwS6ESwy')
-    process_message('/add_worker miner2 3ABC123DEF456GHI789JKL012MNO345PQR678STU')
+    process_message('/add_worker miner2 1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2')
     @bot.clear_messages
 
     process_message('/list_workers')
@@ -436,7 +445,7 @@ class TestIntegration < Minitest::Test
 
     message = last_message
     assert_includes message[:text], 'コマンド一覧'
-    assert_equal 'Markdown', message[:parse_mode]
+    assert_nil message[:parse_mode]
   end
 
   def test_unknown_command
