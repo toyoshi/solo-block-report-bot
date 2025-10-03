@@ -231,6 +231,11 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
 
       send_message(bot, chat_id, welcome_msg)
 
+    when '/add_worker'
+      user.log_command('add_worker', 'help_requested')
+      help_msg = "📋 /add_worker の使用方法:\n\n/add_worker <ラベル> <BTCアドレス>\n\n例: /add_worker miner1 3LKSkoE3QtXAU6oDmVHdMmEJ3EwwS6ESwy"
+      send_message(bot, chat_id, help_msg)
+
     when /^\/add_worker\s+(\S+)\s+(\S+)$/
       label, btc_address = $1, $2
       user.log_command('add_worker', "#{label} #{btc_address}")
@@ -243,10 +248,10 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       existing = Worker.find_by_label(chat_id, label)
       if existing
         existing.update(btc_address: btc_address, updated_at: Time.now)
-        msg = "✅ ワーカー「#{label}」を更新しました。"
+        msg = "✅ ワーカー「#{label}」を更新しました。\nアドレス: #{btc_address}"
       else
         Worker.create(chat_id: chat_id, label: label, btc_address: btc_address)
-        msg = "✅ ワーカー「#{label}」を追加しました。"
+        msg = "✅ ワーカー「#{label}」を追加しました。\nアドレス: #{btc_address}"
       end
 
       send_message(bot, chat_id, msg)
@@ -358,7 +363,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
 
     when '/help'
       # Simplified help - no markdown to avoid parsing errors
-      help_msg = "📋 コマンド一覧:\n\n• /start - ボット開始\n• /help - ヘルプ表示\n• /add_worker - ワーカー追加\n• /status - 設定確認"
+      help_msg = "📋 コマンド一覧:\n\n• /start - ボット開始\n• /help - ヘルプ表示\n• /add_worker <ラベル> <BTCアドレス> - ワーカー追加\n• /remove_worker <ラベル> - ワーカー削除\n• /list_workers - ワーカー一覧\n• /check, /now - 現在の状況確認\n• /time <HH:MM> - 日次レポート時刻設定\n• /status - 設定確認\n• /stop - 通知停止"
 
       send_message(bot, chat_id, help_msg)
 
