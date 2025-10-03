@@ -233,15 +233,28 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
 
     when '/add_worker'
       user.log_command('add_worker', 'help_requested')
-      help_msg = "📋 How to use /add_worker:\n\n/add_worker <label> <BTC_address>\n\nExample: /add_worker miner1 3LKSkoE3QtXAU6oDmVHdMmEJ3EwwS6ESwy"
+      help_msg = "📋 How to use /add_worker:\n\n/add_worker <BTC_address.worker_name>\n\nExample: /add_worker 3LKSkoE3QtXAU6oDmVHdMmEJ3EwwS6ESwy.miner1"
       send_message(bot, chat_id, help_msg)
 
-    when /^\/add_worker\s+(\S+)\s+(\S+)$/
-      label, btc_address = $1, $2
-      user.log_command('add_worker', "#{label} #{btc_address}")
+    when /^\/add_worker\s+(\S+)$/
+      worker_identifier = $1
+      user.log_command('add_worker', worker_identifier)
+
+      # Parse address.worker format
+      if worker_identifier.include?('.')
+        btc_address, label = worker_identifier.split('.', 2)
+      else
+        send_message(bot, chat_id, "❌ Invalid format. Please use: /add_worker <BTC_address.worker_name>\nExample: /add_worker 3LKSkoE3QtXAU6oDmVHdMmEJ3EwwS6ESwy.miner1")
+        next
+      end
 
       unless valid_btc_address?(btc_address)
         send_message(bot, chat_id, "❌ Invalid BTC address.")
+        next
+      end
+
+      if label.nil? || label.empty?
+        send_message(bot, chat_id, "❌ Worker name not specified.")
         next
       end
 
@@ -359,7 +372,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
 
     when '/help'
       # Simplified help - no markdown to avoid parsing errors
-      help_msg = "📋 Available Commands:\n\n• /start - Start bot\n• /help - Show help\n• /add_worker <label> <BTC_address> - Add worker\n• /remove_worker <label> - Remove worker\n• /list_workers - List workers\n• /check, /now - Check current status\n• /set_time_now - Set daily report time to current time\n• /status - Check settings\n• /stop - Stop notifications"
+      help_msg = "📋 Available Commands:\n\n• /start - Start bot\n• /help - Show help\n• /add_worker <BTC_address.worker_name> - Add worker\n• /remove_worker <worker_name> - Remove worker\n• /list_workers - List workers\n• /check, /now - Check current status\n• /set_time_now - Set daily report time to current time\n• /status - Check settings\n• /stop - Stop notifications"
 
       send_message(bot, chat_id, help_msg)
 
