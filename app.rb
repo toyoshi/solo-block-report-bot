@@ -59,7 +59,7 @@ end
 # Format timestamp
 def format_timestamp(timestamp)
   return "N/A" if timestamp.nil? || timestamp == 0
-  Time.at(timestamp).getlocal("+09:00").strftime("%Y-%m-%d %H:%M:%S JST")
+  Time.at(timestamp).utc.strftime("%Y-%m-%d %H:%M:%S UTC")
 end
 
 # Format numbers (K, M, G, T, P units)
@@ -187,8 +187,8 @@ def start_scheduler(bot)
 
   # Every minute: Check for daily report delivery
   scheduler.every '1m' do
-    now = Time.now.getlocal("+09:00")
-    User.where(active: true, hour: now.hour, minute: now.min).each do |user|
+    now_utc = Time.now.utc
+    User.where(active: true, hour: now_utc.hour, minute: now_utc.min).each do |user|
       puts "[#{Time.now}] Sending daily report to #{user.chat_id}"
       send_daily_report(bot, user)
     end
@@ -318,21 +318,17 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       end
 
       lines << ""
-      lines << "⏰ Generated at: #{Time.now.getlocal("+09:00").strftime("%Y-%m-%d %H:%M:%S JST")}"
+      lines << "⏰ Generated at: #{Time.now.utc.strftime("%Y-%m-%d %H:%M:%S UTC")}"
 
       send_message(bot, chat_id, lines.join("\n"))
 
-    when /^\/time\s+(\d{1,2}):(\d{2})$/
-      hour, minute = $1.to_i, $2.to_i
-      user.log_command('time', "#{hour}:#{minute}")
+    when '/set_time_now'
+      user.log_command('set_time_now')
 
-      if (0..23).include?(hour) && (0..59).include?(minute)
-        user.update(hour: hour, minute: minute, active: true)
-        msg = "✅ Daily report time set to #{"%02d:%02d" % [hour, minute]} JST."
-      else
-        msg = "❌ Invalid time format. Please use HH:MM format (example: 09:00)"
-      end
+      now_utc = Time.now.utc
+      user.update(hour: now_utc.hour, minute: now_utc.min, active: true)
 
+      msg = "✅ Daily report time set to #{now_utc.strftime('%H:%M')} UTC. You will receive reports at this time daily."
       send_message(bot, chat_id, msg)
 
     when '/status'
@@ -341,7 +337,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       workers = user.active_workers
       lines = ["📊 Current Settings:"]
       lines << ""
-      lines << "• Daily Report: #{"%02d:%02d" % [user.hour, user.minute]} JST"
+      lines << "• Daily Report: #{"%02d:%02d" % [user.hour, user.minute]} UTC"
       lines << "• Status: #{user.active ? "Active ✅" : "Inactive ❌"}"
       lines << "• Registered Workers: #{workers.size}"
 
@@ -363,7 +359,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
 
     when '/help'
       # Simplified help - no markdown to avoid parsing errors
-      help_msg = "📋 Available Commands:\n\n• /start - Start bot\n• /help - Show help\n• /add_worker <label> <BTC_address> - Add worker\n• /remove_worker <label> - Remove worker\n• /list_workers - List workers\n• /check, /now - Check current status\n• /time <HH:MM> - Set daily report time\n• /status - Check settings\n• /stop - Stop notifications"
+      help_msg = "📋 Available Commands:\n\n• /start - Start bot\n• /help - Show help\n• /add_worker <label> <BTC_address> - Add worker\n• /remove_worker <label> - Remove worker\n• /list_workers - List workers\n• /check, /now - Check current status\n• /set_time_now - Set daily report time to current time\n• /status - Check settings\n• /stop - Stop notifications"
 
       send_message(bot, chat_id, help_msg)
 
